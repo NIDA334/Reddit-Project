@@ -8,9 +8,9 @@ properties([
 pipeline {
     agent any
     environment {
-        TERRAFORM_DIR = 'EKS-TF' // Terraform project folder
-        AWS_REGION    = 'us-east-1'
-        AWS_CREDENTIALS = 'aws-key'
+        TERRAFORM_DIR    = 'EKS-TF'
+        AWS_REGION       = 'us-east-1'
+        AWS_CREDENTIALS  = 'aws-key'  // This should match the Jenkins credential ID
     }
     stages {
         stage('Checkout from Git') {
@@ -19,27 +19,31 @@ pipeline {
             }
         }
 
-        stage('Initializing Terraform') {
+        stage('Terraform Init') {
             steps {
-                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
-                    dir("${env.TERRAFORM_DIR}") {
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    dir("${TERRAFORM_DIR}") {
                         script {
-                            // Remove old terraform cache
                             sh 'rm -rf .terraform'
-                            // Initialize Terraform with reconfigure
-                            sh 'terraform init -reconfigure || { echo "Terraform init failed"; exit 1; }'
+                            def status = sh(script: 'terraform init -reconfigure', returnStatus: true)
+                            if (status != 0) {
+                                error "Terraform init failed"
+                            }
                         }
                     }
                 }
             }
         }
 
-        stage('Validate Terraform Code') {
+        stage('Terraform Validate') {
             steps {
-                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
-                    dir("${env.TERRAFORM_DIR}") {
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    dir("${TERRAFORM_DIR}") {
                         script {
-                            sh 'terraform validate || { echo "Terraform validation failed"; exit 1; }'
+                            def status = sh(script: 'terraform validate', returnStatus: true)
+                            if (status != 0) {
+                                error "Terraform validation failed"
+                            }
                         }
                     }
                 }
@@ -48,10 +52,13 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
-                    dir("${env.TERRAFORM_DIR}") {
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    dir("${TERRAFORM_DIR}") {
                         script {
-                            sh "terraform plan -var-file=${params.'File-Name'} || { echo 'Terraform plan failed'; exit 1; }"
+                            def status = sh(script: "terraform plan -var-file=${params.File-Name}", returnStatus: true)
+                            if (status != 0) {
+                                error "Terraform plan failed"
+                            }
                         }
                     }
                 }
@@ -60,15 +67,17 @@ pipeline {
 
         stage('Terraform Action') {
             steps {
-                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") { 
-                    dir("${env.TERRAFORM_DIR}") {
+                withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
+                    dir("${TERRAFORM_DIR}") {
                         script {
                             if (params.'Terraform-Action' == 'apply') {
-                                sh "terraform apply -auto-approve -var-file=${params.'File-Name'} || { echo 'Terraform apply failed'; exit 1; }"
+                                def status = sh(script: "terraform apply -auto-approve -var-file=${params.File-Name}", returnStatus: true)
+                                if (status != 0) { error "Terraform apply failed" }
                             } else if (params.'Terraform-Action' == 'destroy') {
-                                sh "terraform destroy -auto-approve -var-file=${params.'File-Name'} || { echo 'Terraform destroy failed'; exit 1; }"
+                                def status = sh(script: "terraform destroy -auto-approve -var-file=${params.File-Name}", returnStatus: true)
+                                if (status != 0) { error "Terraform destroy failed" }
                             } else {
-                                error "Invalid value for Terraform-Action: ${params.'Terraform-Action'}"
+                                error "Invalid Terraform-Action value: ${params.'Terraform-Action'}"
                             }
                         }
                     }
@@ -78,7 +87,7 @@ pipeline {
     }
     post {
         failure {
-            echo "Pipeline failed. Please check Terraform backend, S3 bucket, and DynamoDB table."
+            echo "Pipeline failed. Please check Terraform backend, S3 bucket, and AWS credentials."
         }
         success {
             echo "Pipeline completed successfully!"
