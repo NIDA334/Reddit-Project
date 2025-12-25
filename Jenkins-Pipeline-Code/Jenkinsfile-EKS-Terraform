@@ -15,7 +15,7 @@ pipeline {
     stages {
         stage('Checkout from Git') {
             steps {
-                git branch: 'main', url: 'https://github.com/uniquesreedhar/Reddit-Project.git'
+                git branch: 'main', url: 'https://github.com/NIDA334/Reddit-Project.git'
             }
         }
 
