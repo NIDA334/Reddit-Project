@@ -13,44 +13,49 @@ pipeline {
                 git branch: 'main', url: 'https://github.com/uniquesreedhar/Reddit-Project.git'
             }
         }
+
         stage('Initializing Terraform') {
             steps {
                 withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
-                        sh 'terraform init'
+                    dir('EKS-TF') {
+                        script {
+                            // Remove old Terraform cache
+                            sh 'rm -rf .terraform'
+                            // Initialize Terraform with reconfigure to use correct backend
+                            sh 'terraform init -reconfigure'
+                        }
                     }
-                }
                 }
             }
         }
+
         stage('Validate Terraform Code') {
             steps {
                 withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
-                        sh 'terraform validate'
+                    dir('EKS-TF') {
+                        script {
+                            sh 'terraform validate'
+                        }
                     }
-                }
                 }
             }
         }
+
         stage('Terraform Plan') {
             steps {
                 withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
-                        sh "terraform plan -var-file=${params.'File-Name'}"
+                    dir('EKS-TF') {
+                        script {
+                            sh "terraform plan -var-file=${params.'File-Name'}"
+                        }
                     }
-                }
                 }
             }
         }
+
         stage('Terraform Action') {
             steps {
                 withAWS(credentials: 'aws-key', region: 'us-east-1') { 
-                script {
-                    echo "${params.'Terraform-Action'}"
                     dir('EKS-TF') {
                         script {
                             if (params.'Terraform-Action' == 'apply') {
@@ -62,7 +67,6 @@ pipeline {
                             }
                         }
                     }
-                }
                 }
             }
         }
