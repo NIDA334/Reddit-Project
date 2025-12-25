@@ -16,7 +16,7 @@ pipeline {
 
         stage('Checkout from Git') {
             steps {
-                git branch: 'main', url: 'https://github.com/uniquesreedhar/Reddit-Project.git'
+                git branch: 'main', url: 'https://github.com/NIDA334/Reddit-Project.git'
             }
         }
 
@@ -68,8 +68,8 @@ pipeline {
                     withDockerRegistry(credentialsId: 'docker', url: 'https://index.docker.io/v1/') {
                         sh """
                             docker build -t reddit .
-                            docker tag reddit sreedhar8897/reddit:${BUILD_NUMBER}
-                            docker push sreedhar8897/reddit:${BUILD_NUMBER}
+                            docker tag reddit nida334/reddit:${BUILD_NUMBER}
+                            docker push nida334/reddit:${BUILD_NUMBER}
                         """
                     }
                 }
