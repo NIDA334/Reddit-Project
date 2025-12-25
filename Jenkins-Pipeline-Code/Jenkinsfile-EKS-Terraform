@@ -10,7 +10,7 @@ pipeline {
     environment {
         TERRAFORM_DIR    = 'EKS-TF'
         AWS_REGION       = 'us-east-1'
-        AWS_CREDENTIALS  = 'aws-key'  // This should match the Jenkins credential ID
+        AWS_CREDENTIALS  = 'aws-key' // Jenkins credential ID
     }
     stages {
         stage('Checkout from Git') {
@@ -23,13 +23,11 @@ pipeline {
             steps {
                 withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
                     dir("${TERRAFORM_DIR}") {
-                        script {
-                            sh 'rm -rf .terraform'
-                            def status = sh(script: 'terraform init -reconfigure', returnStatus: true)
-                            if (status != 0) {
-                                error "Terraform init failed"
-                            }
-                        }
+                        sh '''
+                            set -e
+                            rm -rf .terraform
+                            terraform init -reconfigure
+                        '''
                     }
                 }
             }
@@ -39,12 +37,10 @@ pipeline {
             steps {
                 withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
                     dir("${TERRAFORM_DIR}") {
-                        script {
-                            def status = sh(script: 'terraform validate', returnStatus: true)
-                            if (status != 0) {
-                                error "Terraform validation failed"
-                            }
-                        }
+                        sh '''
+                            set -e
+                            terraform validate
+                        '''
                     }
                 }
             }
@@ -54,12 +50,10 @@ pipeline {
             steps {
                 withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
                     dir("${TERRAFORM_DIR}") {
-                        script {
-                            def status = sh(script: "terraform plan -var-file=${params.File-Name}", returnStatus: true)
-                            if (status != 0) {
-                                error "Terraform plan failed"
-                            }
-                        }
+                        sh """
+                            set -e
+                            terraform plan -var-file=${params["File-Name"]}
+                        """
                     }
                 }
             }
@@ -70,14 +64,13 @@ pipeline {
                 withAWS(credentials: "${AWS_CREDENTIALS}", region: "${AWS_REGION}") {
                     dir("${TERRAFORM_DIR}") {
                         script {
-                            if (params.'Terraform-Action' == 'apply') {
-                                def status = sh(script: "terraform apply -auto-approve -var-file=${params.File-Name}", returnStatus: true)
-                                if (status != 0) { error "Terraform apply failed" }
-                            } else if (params.'Terraform-Action' == 'destroy') {
-                                def status = sh(script: "terraform destroy -auto-approve -var-file=${params.File-Name}", returnStatus: true)
-                                if (status != 0) { error "Terraform destroy failed" }
+                            def action = params["Terraform-Action"]
+                            if (action == "apply") {
+                                sh "terraform apply -auto-approve -var-file=${params["File-Name"]}"
+                            } else if (action == "destroy") {
+                                sh "terraform destroy -auto-approve -var-file=${params["File-Name"]}"
                             } else {
-                                error "Invalid Terraform-Action value: ${params.'Terraform-Action'}"
+                                error "Invalid Terraform-Action value: ${action}"
                             }
                         }
                     }
@@ -85,9 +78,10 @@ pipeline {
             }
         }
     }
+
     post {
         failure {
-            echo "Pipeline failed. Please check Terraform backend, S3 bucket, and AWS credentials."
+            echo "Pipeline failed. Check Terraform backend, S3 bucket, and AWS credentials."
         }
         success {
             echo "Pipeline completed successfully!"
