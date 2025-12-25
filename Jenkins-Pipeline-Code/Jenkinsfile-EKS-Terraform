@@ -7,6 +7,11 @@ properties([
 
 pipeline {
     agent any
+    environment {
+        TERRAFORM_DIR = 'EKS-TF' // Terraform project folder
+        AWS_REGION    = 'us-east-1'
+        AWS_CREDENTIALS = 'aws-key'
+    }
     stages {
         stage('Checkout from Git') {
             steps {
@@ -16,13 +21,13 @@ pipeline {
 
         stage('Initializing Terraform') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                    dir('EKS-TF') {
+                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
+                    dir("${env.TERRAFORM_DIR}") {
                         script {
-                            // Remove old Terraform cache
+                            // Remove old terraform cache
                             sh 'rm -rf .terraform'
-                            // Initialize Terraform with reconfigure to use correct backend
-                            sh 'terraform init -reconfigure'
+                            // Initialize Terraform with reconfigure
+                            sh 'terraform init -reconfigure || { echo "Terraform init failed"; exit 1; }'
                         }
                     }
                 }
@@ -31,10 +36,10 @@ pipeline {
 
         stage('Validate Terraform Code') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                    dir('EKS-TF') {
+                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
+                    dir("${env.TERRAFORM_DIR}") {
                         script {
-                            sh 'terraform validate'
+                            sh 'terraform validate || { echo "Terraform validation failed"; exit 1; }'
                         }
                     }
                 }
@@ -43,10 +48,10 @@ pipeline {
 
         stage('Terraform Plan') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                    dir('EKS-TF') {
+                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") {
+                    dir("${env.TERRAFORM_DIR}") {
                         script {
-                            sh "terraform plan -var-file=${params.'File-Name'}"
+                            sh "terraform plan -var-file=${params.'File-Name'} || { echo 'Terraform plan failed'; exit 1; }"
                         }
                     }
                 }
@@ -55,13 +60,13 @@ pipeline {
 
         stage('Terraform Action') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') { 
-                    dir('EKS-TF') {
+                withAWS(credentials: "${env.AWS_CREDENTIALS}", region: "${env.AWS_REGION}") { 
+                    dir("${env.TERRAFORM_DIR}") {
                         script {
                             if (params.'Terraform-Action' == 'apply') {
-                                sh "terraform apply -auto-approve -var-file=${params.'File-Name'}"
+                                sh "terraform apply -auto-approve -var-file=${params.'File-Name'} || { echo 'Terraform apply failed'; exit 1; }"
                             } else if (params.'Terraform-Action' == 'destroy') {
-                                sh "terraform destroy -auto-approve -var-file=${params.'File-Name'}"
+                                sh "terraform destroy -auto-approve -var-file=${params.'File-Name'} || { echo 'Terraform destroy failed'; exit 1; }"
                             } else {
                                 error "Invalid value for Terraform-Action: ${params.'Terraform-Action'}"
                             }
@@ -69,6 +74,14 @@ pipeline {
                     }
                 }
             }
+        }
+    }
+    post {
+        failure {
+            echo "Pipeline failed. Please check Terraform backend, S3 bucket, and DynamoDB table."
+        }
+        success {
+            echo "Pipeline completed successfully!"
         }
     }
 }
