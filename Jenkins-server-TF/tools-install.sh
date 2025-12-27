@@ -1,64 +1,81 @@
 #!/bin/bash
-# For Ubuntu 22.04
-# Intsalling Java
+set -e
+
+echo "===== Updating system ====="
 sudo apt update -y
-sudo apt install openjdk-17-jre -y
-sudo apt install openjdk-17-jdk -y
+
+echo "===== Installing Java 17 ====="
+sudo apt install -y openjdk-17-jdk openjdk-17-jre
 java --version
 
-# Installing Jenkins
+echo "===== Installing Jenkins ====="
 curl -fsSL https://pkg.jenkins.io/debian/jenkins.io-2023.key | sudo tee \
-  /usr/share/keyrings/jenkins-keyring.asc > /dev/null
-echo deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] \
-  https://pkg.jenkins.io/debian binary/ | sudo tee \
-  /etc/apt/sources.list.d/jenkins.list > /dev/null
-sudo apt-get update -y
-sudo apt-get install jenkins -y
+/usr/share/keyrings/jenkins-keyring.asc > /dev/null
 
-# Installing Docker 
-#!/bin/bash
-sudo apt update
-sudo apt install docker.io -y
+echo "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian binary/" | sudo tee \
+/etc/apt/sources.list.d/jenkins.list > /dev/null
+
+sudo apt update -y
+sudo apt install -y jenkins
+sudo systemctl enable jenkins
+sudo systemctl start jenkins
+
+echo "===== Installing Docker ====="
+sudo apt install -y docker.io
+sudo systemctl enable docker
+sudo systemctl start docker
+
 sudo usermod -aG docker jenkins
 sudo usermod -aG docker ubuntu
-sudo systemctl restart docker
-sudo chmod 777 /var/run/docker.sock
 
-# If you don't want to install Jenkins, you can create a container of Jenkins
-# docker run -d -p 8080:8080 -p 50000:50000 --name jenkins-container jenkins/jenkins:lts
+echo "===== Fixing Docker permission ====="
+sudo chmod 666 /var/run/docker.sock
 
-# Run Docker Container of Sonarqube
-#!/bin/bash
-docker run -d  --name sonar -p 9000:9000 sonarqube:lts-community
-
-
-# Installing AWS CLI
-#!/bin/bash
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+echo "===== Installing AWS CLI v2 ====="
 sudo apt install unzip -y
-unzip awscliv2.zip
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip -q awscliv2.zip
 sudo ./aws/install
+aws --version
 
-# Installing Kubectl
-#!/bin/bash
-sudo apt update
-sudo apt install curl -y
-sudo curl -LO "https://dl.k8s.io/release/v1.28.4/bin/linux/amd64/kubectl"
-sudo chmod +x kubectl
+echo "===== Installing kubectl ====="
+curl -LO https://dl.k8s.io/release/v1.28.4/bin/linux/amd64/kubectl
+chmod +x kubectl
 sudo mv kubectl /usr/local/bin/
 kubectl version --client
 
-# Installing Terraform
-#!/bin/bash
-wget -O- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor -o /usr/share/keyrings/hashicorp-archive-keyring.gpg
-echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/hashicorp.list
-sudo apt update
-sudo apt install terraform -y
+echo "===== Installing Terraform ====="
+wget -qO- https://apt.releases.hashicorp.com/gpg | sudo gpg --dearmor \
+-o /usr/share/keyrings/hashicorp-archive-keyring.gpg
 
-# Installing Trivy
-#!/bin/bash
-sudo apt-get install wget apt-transport-https gnupg lsb-release -y
-wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
-echo deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main | sudo tee -a /etc/apt/sources.list.d/trivy.list
-sudo apt update
-sudo apt install trivy -y
+echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] \
+https://apt.releases.hashicorp.com $(lsb_release -cs) main" | sudo tee \
+/etc/apt/sources.list.d/hashicorp.list > /dev/null
+
+sudo apt update -y
+sudo apt install -y terraform
+terraform version
+
+echo "===== Installing Trivy ====="
+wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | \
+sudo gpg --dearmor -o /usr/share/keyrings/trivy.gpg
+
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] \
+https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | \
+sudo tee /etc/apt/sources.list.d/trivy.list
+
+sudo apt update -y
+sudo apt install -y trivy
+trivy --version
+
+echo "===== Preparing system for SonarQube ====="
+sudo sysctl -w vm.max_map_count=262144
+sudo sysctl -w fs.file-max=65536
+
+echo "===== Running SonarQube Container ====="
+docker run -d \
+--name sonar \
+-p 9000:9000 \
+sonarqube:lts-community
+
+echo "===== ALL TOOLS INSTALLED SUCCESSFULLY ====="
