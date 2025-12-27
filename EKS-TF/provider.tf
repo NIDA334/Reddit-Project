@@ -3,11 +3,11 @@ provider "aws" {
 }
 
 data "aws_eks_cluster" "eks" {
-  name = aws_eks_cluster.eks.name
+  name = "Reddit-EKS-Cluster"  # <--- put your existing cluster name here
 }
 
 data "aws_eks_cluster_auth" "eks" {
-  name = aws_eks_cluster.eks.name
+  name = data.aws_eks_cluster.eks.name
 }
 
 provider "kubernetes" {
